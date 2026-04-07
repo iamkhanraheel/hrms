@@ -175,6 +175,12 @@ class SalaryComponent(Document):
 				(d for d in salary_structure.get(f"{self.type.lower()}s") if d.salary_component == self.name),
 				None,
 			)
+			if not salary_detail_row:
+				frappe.log_error(
+					title=_("Salary Structure Update Error"),
+					message=_("Salary component {0} not found in salary structure {1}").format(self.name, structure)
+				)
+				continue
 			if is_formula_related:
 				value = value if self.amount_based_on_formula else None
 				salary_detail_row.set("amount_based_on_formula", self.amount_based_on_formula)
