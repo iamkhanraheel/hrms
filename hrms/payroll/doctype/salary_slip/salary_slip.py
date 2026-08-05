@@ -1263,7 +1263,7 @@ class SalarySlip(TransactionBase):
 		once and return fully-resolved rows (with default_amount + flags). Shared
 		across the earnings and deductions passes so cross-component references
 		(e.g. a deduction referencing an earning abbr) resolve correctly."""
-		self._evaluated_components = self._get_ssa_doc().get_evaluated_components()
+		self._evaluated_components = self._get_ssa_doc().get_evaluated_components(self.total_working_days)
 
 	def _get_ssa_doc(self):
 		if not getattr(self, "_ssa_doc", None):

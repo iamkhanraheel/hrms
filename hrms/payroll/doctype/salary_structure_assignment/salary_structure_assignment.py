@@ -236,7 +236,7 @@ class SalaryStructureAssignment(Document):
 				title=_("Missing Opening Entries"),
 			)
 
-	def get_evaluated_components(self) -> frappe._dict:
+	def get_evaluated_components(self, total_working_days: int | None = None) -> frappe._dict:
 		"""Evaluate all salary structure components for this assignment and return
 		fully-evaluated rows the salary slip can consume directly.
 
@@ -248,8 +248,14 @@ class SalaryStructureAssignment(Document):
 		``default_amount`` directly and applies payment-days proration / tax on
 		top (it re-evaluates each formula once against its prorated context for
 		the actual ``amount``).
+
+		``total_working_days``: the calling salary slip's own day count for the
+		period being processed. Without it, the full-cycle baseline falls back to
+		the assignment's own from_date month, which is wrong whenever a slip's
+		actual month has a different number of days (see calculate_ctc_and_gross,
+		which has no specific slip and legitimately uses that fallback).
 		"""
-		_data, rows_by_type = self._evaluate_all_components()
+		_data, rows_by_type = self._evaluate_all_components(total_working_days)
 
 		return frappe._dict(
 			earnings=rows_by_type["earnings"],
@@ -310,12 +316,12 @@ class SalaryStructureAssignment(Document):
 			self.precision("ctc"),
 		)
 
-	def _evaluate_all_components(self) -> tuple[frappe._dict, dict]:
+	def _evaluate_all_components(self, total_working_days: int | None = None) -> tuple[frappe._dict, dict]:
 		"""Single shared-context pass over earnings -> deductions ->
 		employer_contributions. Returns the final context and evaluated rows by
 		type. Does not mutate the cached salary structure doc."""
 		salary_structure = frappe.get_cached_doc("Salary Structure", self.salary_structure)
-		data = self._get_component_eval_context()
+		data = self._get_component_eval_context(total_working_days)
 
 		rows_by_type = {}
 		rows_by_type["earnings"] = self._evaluate_component_table(
@@ -339,7 +345,7 @@ class SalaryStructureAssignment(Document):
 		)
 		return data, rows_by_type
 
-	def _get_component_eval_context(self) -> frappe._dict:
+	def _get_component_eval_context(self, total_working_days: int | None = None) -> frappe._dict:
 		from hrms.payroll.doctype.payroll_entry.payroll_entry import get_start_end_dates
 
 		data = get_component_eval_context(self.employee, self.as_dict())
@@ -350,7 +356,10 @@ class SalaryStructureAssignment(Document):
 		# values (payment_days == total_working_days, ratio 1).
 		frequency = frappe.get_cached_value("Salary Structure", self.salary_structure, "payroll_frequency")
 		dates = get_start_end_dates(frequency, self.from_date, self.company)
-		period_days = date_diff(dates.end_date, dates.start_date) + 1
+		# A calling salary slip's own day count overrides the from_date month's, since
+		# that month can differ in length from whichever month the slip is actually for
+		# (e.g. assignment starting in a 30-day month, slip generated for a 31-day one).
+		period_days = total_working_days or (date_diff(dates.end_date, dates.start_date) + 1)
 		data.start_date = dates.start_date
 		data.end_date = dates.end_date
 		data.payment_days = period_days
