@@ -245,9 +245,9 @@ hrms.HierarchyChart = class {
 						if (!expand_node && data.connections) expand_node = node;
 					});
 
-					me.root_node = expand_node;
-					if (!expanded_view) {
-						me.expand_node(expand_node);
+					me.root_node = expand_node || node;
+					if (!expanded_view && me.root_node) {
+						me.expand_node(me.root_node);
 					}
 				}
 			});
